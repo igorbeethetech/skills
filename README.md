@@ -34,7 +34,7 @@ Each skill is a self-contained package that teaches Claude how to build specific
 
 ```bash
 # Personal (available across all projects)
-git clone https://github.com/YOUR_USERNAME/claude-skills.git /tmp/claude-skills
+git clone https://github.com/igorbeethetech/claude-skills.git /tmp/claude-skills
 cp -r /tmp/claude-skills/skills/knowledge-base-rag ~/.claude/skills/knowledge-base-rag
 rm -rf /tmp/claude-skills
 ```
@@ -43,7 +43,7 @@ rm -rf /tmp/claude-skills
 
 ```bash
 # Clone the full repo and point Claude to it
-git clone https://github.com/YOUR_USERNAME/claude-skills.git ~/claude-skills
+git clone https://github.com/igorbeethetech/claude-skills.git ~/claude-skills
 
 # Then for each project, or globally:
 claude --add-dir ~/claude-skills/skills/knowledge-base-rag
@@ -156,6 +156,6 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 <p align="center">
-  Built by <a href="https://github.com/YOUR_USERNAME">Bee The Tech</a> · 
+  Built by <a href="https://github.com/igorbeethetech">Bee The Tech</a> · 
   Powering AI with <a href="https://claude.ai">Claude</a>
 </p>
