@@ -42,10 +42,10 @@ git clone https://github.com/igorbeethetech/skills.git /tmp/beethetech-skills &&
 **Windows (PowerShell):**
 
 ```powershell
-git clone https://github.com/igorbeethetech/skills.git $env:TEMP\beethetech-skills
-New-Item -ItemType Directory -Force -Path "$HOME\.claude\skills" | Out-Null
-Copy-Item -Recurse "$env:TEMP\beethetech-skills\skills\knowledge-base-rag" "$HOME\.claude\skills\knowledge-base-rag"
-Remove-Item -Recurse -Force "$env:TEMP\beethetech-skills"
+git clone https://github.com/igorbeethetech/skills.git $env:TEMP\beethetech-skills; `
+  New-Item -ItemType Directory -Force -Path "$HOME\.claude\skills" | Out-Null; `
+  Copy-Item -Recurse "$env:TEMP\beethetech-skills\skills\knowledge-base-rag" "$HOME\.claude\skills\knowledge-base-rag"; `
+  Remove-Item -Recurse -Force "$env:TEMP\beethetech-skills"
 ```
 
 > Replace `knowledge-base-rag` with any skill name from the table above.
@@ -66,10 +66,10 @@ git clone https://github.com/igorbeethetech/skills.git /tmp/beethetech-skills &&
 **Windows (PowerShell):**
 
 ```powershell
-git clone https://github.com/igorbeethetech/skills.git $env:TEMP\beethetech-skills
-New-Item -ItemType Directory -Force -Path ".claude\skills" | Out-Null
-Copy-Item -Recurse "$env:TEMP\beethetech-skills\skills\knowledge-base-rag" ".claude\skills\knowledge-base-rag"
-Remove-Item -Recurse -Force "$env:TEMP\beethetech-skills"
+git clone https://github.com/igorbeethetech/skills.git $env:TEMP\beethetech-skills; `
+  New-Item -ItemType Directory -Force -Path ".claude\skills" | Out-Null; `
+  Copy-Item -Recurse "$env:TEMP\beethetech-skills\skills\knowledge-base-rag" ".claude\skills\knowledge-base-rag"; `
+  Remove-Item -Recurse -Force "$env:TEMP\beethetech-skills"
 ```
 
 Then commit the skill to your repo:
@@ -93,10 +93,10 @@ git clone https://github.com/igorbeethetech/skills.git /tmp/beethetech-skills &&
 **Windows (PowerShell):**
 
 ```powershell
-git clone https://github.com/igorbeethetech/skills.git $env:TEMP\beethetech-skills
-New-Item -ItemType Directory -Force -Path "$HOME\.claude\skills" | Out-Null
-Copy-Item -Recurse "$env:TEMP\beethetech-skills\skills\*" "$HOME\.claude\skills\"
-Remove-Item -Recurse -Force "$env:TEMP\beethetech-skills"
+git clone https://github.com/igorbeethetech/skills.git $env:TEMP\beethetech-skills; `
+  New-Item -ItemType Directory -Force -Path "$HOME\.claude\skills" | Out-Null; `
+  Copy-Item -Recurse "$env:TEMP\beethetech-skills\skills\*" "$HOME\.claude\skills\"; `
+  Remove-Item -Recurse -Force "$env:TEMP\beethetech-skills"
 ```
 
 ### Update an installed skill

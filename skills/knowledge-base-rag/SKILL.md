@@ -1,5 +1,5 @@
 ---
-name: n8n-knowledge-base-rag
+name: knowledge-base-rag
 description: >
   Build complete knowledge base systems where users can add files (PDF, DOCX, TXT/MD),
   website URLs, and plain text — and an AI agent searches all of it via advanced RAG.
