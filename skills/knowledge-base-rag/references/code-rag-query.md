@@ -10,6 +10,11 @@ Implementation patterns for the RAG query layer in application code.
 5. [Optional: Query Expansion](#optional-query-expansion)
 6. [API Endpoints](#api-endpoints)
 7. [Integration with LLM/Agent](#integration-with-llm-agent)
+8. [Structured Output](#structured-output)
+9. [Citation-Based Prompt Template](#citation-based-prompt-template)
+10. [Cross-Encoder Reranking](#cross-encoder-reranking)
+11. [LangChain / LangGraph Integration](#langchain--langgraph-integration)
+12. [Evaluation Helpers](#evaluation-helpers)
 
 ---
 
@@ -464,4 +469,391 @@ const searchKnowledgeBase = tool({
     return result.context;
   }
 });
+```
+
+---
+
+## Structured Output
+
+For applications that need structured responses from RAG (API responses, UI rendering):
+
+### TypeScript (Zod schema)
+
+```typescript
+import { z } from 'zod';
+
+const RAGStructuredResponse = z.object({
+  answer: z.string().describe('The answer based on retrieved context'),
+  confidence: z.number().min(0).max(1).describe('Confidence score'),
+  sources_used: z.array(z.number()).describe('Indices of sources used'),
+  follow_up_questions: z.array(z.string()).describe('Suggested follow-up questions'),
+  no_answer: z.boolean().describe('True if context does not contain enough information')
+});
+
+type RAGStructuredResponse = z.infer<typeof RAGStructuredResponse>;
+
+export async function structuredRagQuery(query: string): Promise<RAGStructuredResponse> {
+  const ragResult = await ragQuery(query);
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: `Answer the question based on the context. Return JSON matching this schema:
+{
+  "answer": "your answer",
+  "confidence": 0.0-1.0,
+  "sources_used": [1, 3],
+  "follow_up_questions": ["question 1"],
+  "no_answer": false
+}
+
+Context:
+${ragResult.context}`
+      },
+      { role: 'user', content: query }
+    ],
+    response_format: { type: 'json_object' }
+  });
+
+  return RAGStructuredResponse.parse(
+    JSON.parse(response.choices[0].message.content!)
+  );
+}
+```
+
+### Python (Pydantic)
+
+```python
+from pydantic import BaseModel, Field
+
+class RAGStructuredResponse(BaseModel):
+    answer: str = Field(description="The answer based on retrieved context")
+    confidence: float = Field(ge=0, le=1, description="Confidence score")
+    sources_used: list[int] = Field(description="Indices of sources used")
+    follow_up_questions: list[str] = Field(description="Suggested follow-up questions")
+    no_answer: bool = Field(description="True if context lacks enough info")
+
+async def structured_rag_query(query: str) -> RAGStructuredResponse:
+    rag_result = await rag_query(query)
+
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": f"""Answer the question based on the context. Return JSON:
+{{"answer": "...", "confidence": 0.0-1.0, "sources_used": [1, 3], "follow_up_questions": ["..."], "no_answer": false}}
+
+Context:
+{rag_result.context}"""},
+            {"role": "user", "content": query}
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    return RAGStructuredResponse.model_validate_json(response.choices[0].message.content)
+```
+
+---
+
+## Citation-Based Prompt Template
+
+A prompt template that enforces source citations in responses:
+
+```typescript
+const CITATION_PROMPT = `You are a helpful assistant with access to a knowledge base.
+Answer the user's question using ONLY the provided context.
+
+Rules:
+- Cite your sources using [Source N] notation after each claim
+- If the context doesn't contain enough information, say: "I don't have enough information to answer this fully."
+- Never make up information not present in the sources
+- If multiple sources confirm the same fact, cite all of them
+- End your response with a "Sources Used" section listing the full source titles
+
+## Knowledge Base Context:
+{context}
+
+## Sources:
+{sources}`;
+
+export function buildCitationPrompt(ragResult: RAGResponse): string {
+  const sourcesStr = ragResult.sources
+    .map((s, i) => `[Source ${i + 1}]: ${s.title} (${s.type})`)
+    .join('\n');
+
+  return CITATION_PROMPT
+    .replace('{context}', ragResult.context)
+    .replace('{sources}', sourcesStr);
+}
+```
+
+```python
+CITATION_PROMPT = """You are a helpful assistant with access to a knowledge base.
+Answer the user's question using ONLY the provided context.
+
+Rules:
+- Cite your sources using [Source N] notation after each claim
+- If the context doesn't contain enough information, say: "I don't have enough information to answer this fully."
+- Never make up information not present in the sources
+- If multiple sources confirm the same fact, cite all of them
+- End your response with a "Sources Used" section listing the full source titles
+
+## Knowledge Base Context:
+{context}
+
+## Sources:
+{sources}"""
+
+def build_citation_prompt(rag_result: RAGResponse) -> str:
+    sources_str = "\n".join(
+        f"[Source {i+1}]: {s['title']} ({s['type']})"
+        for i, s in enumerate(rag_result.sources)
+    )
+    return CITATION_PROMPT.format(context=rag_result.context, sources=sources_str)
+```
+
+---
+
+## Cross-Encoder Reranking
+
+Alternative to Cohere Rerank using open-source cross-encoder models from sentence-transformers.
+Runs locally — no API costs, but requires GPU for best performance.
+
+### Python (sentence-transformers)
+
+```python
+from sentence_transformers import CrossEncoder
+
+# Load model (downloads on first use, ~420MB)
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-12-v2")
+
+def cross_encoder_rerank(
+    query: str,
+    documents: list[str],
+    top_n: int = 5
+) -> list[dict]:
+    # Create query-document pairs
+    pairs = [[query, doc] for doc in documents]
+
+    # Score all pairs
+    scores = reranker.predict(pairs)
+
+    # Sort by score, return top N
+    scored = sorted(
+        enumerate(scores),
+        key=lambda x: x[1],
+        reverse=True
+    )[:top_n]
+
+    return [{"index": idx, "relevance_score": float(score)} for idx, score in scored]
+
+# Usage in the query pipeline:
+# results = await hybrid_search(embedding, query, max_results=20)
+# reranked = cross_encoder_rerank(query, [r["content"] for r in results], top_n=5)
+# final_results = [results[r["index"]] for r in reranked]
+```
+
+### TypeScript (via Python subprocess or API)
+
+For TypeScript projects, you have two options:
+1. **Run a Python microservice** with the cross-encoder model and call it via HTTP
+2. **Use Cohere Rerank API** (cloud-based, no local GPU needed) — see existing reranking section above
+
+```typescript
+// Option 1: Call local Python reranking service
+async function crossEncoderRerank(
+  query: string,
+  documents: string[],
+  topN: number = 5
+): Promise<Array<{ index: number; relevanceScore: number }>> {
+  const response = await fetch('http://localhost:8001/rerank', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, documents, top_n: topN })
+  });
+  return response.json();
+}
+```
+
+---
+
+## LangChain / LangGraph Integration
+
+Complete RAG chain using LangGraph for more control over the retrieval and generation pipeline.
+
+### Python (LangGraph RAG Chain)
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.messages import HumanMessage, SystemMessage
+from typing import TypedDict
+
+class RAGState(TypedDict):
+    question: str
+    context: str
+    sources: list[dict]
+    answer: str
+
+# Define nodes
+async def retrieve(state: RAGState) -> RAGState:
+    """Retrieve relevant documents from knowledge base."""
+    result = await rag_query(state["question"])
+    return {
+        **state,
+        "context": result.context,
+        "sources": result.sources
+    }
+
+async def generate(state: RAGState) -> RAGState:
+    """Generate answer using retrieved context."""
+    llm = ChatOpenAI(model="gpt-4o")
+    response = await llm.ainvoke([
+        SystemMessage(content=f"""Answer based on this context. Cite sources using [Source N].
+
+Context:
+{state['context']}"""),
+        HumanMessage(content=state["question"])
+    ])
+    return {**state, "answer": response.content}
+
+# Build graph
+graph = StateGraph(RAGState)
+graph.add_node("retrieve", retrieve)
+graph.add_node("generate", generate)
+graph.add_edge(START, "retrieve")
+graph.add_edge("retrieve", "generate")
+graph.add_edge("generate", END)
+
+rag_chain = graph.compile()
+
+# Usage
+result = await rag_chain.ainvoke({"question": "What is the refund policy?"})
+print(result["answer"])
+```
+
+### TypeScript (LangChain)
+
+```typescript
+import { ChatOpenAI } from '@langchain/openai';
+import { StringOutputParser } from '@langchain/core/output_parsers';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { RunnableSequence, RunnablePassthrough } from '@langchain/core/runnables';
+
+const llm = new ChatOpenAI({ modelName: 'gpt-4o' });
+
+const prompt = ChatPromptTemplate.fromTemplate(`
+Answer the question based on the following context. Cite sources using [Source N].
+
+Context:
+{context}
+
+Question: {question}
+`);
+
+const ragChain = RunnableSequence.from([
+  {
+    context: async (input: { question: string }) => {
+      const result = await ragQuery(input.question);
+      return result.context;
+    },
+    question: (input: { question: string }) => input.question
+  },
+  prompt,
+  llm,
+  new StringOutputParser()
+]);
+
+// Usage
+const answer = await ragChain.invoke({ question: 'What is the refund policy?' });
+```
+
+---
+
+## Evaluation Helpers
+
+Functions to measure RAG quality during development and testing.
+
+### Python
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class EvalCase:
+    question: str
+    expected_keywords: list[str]  # Keywords that should appear in retrieved context
+    expected_answer_keywords: list[str] = None  # Keywords in the final answer
+
+async def evaluate_retrieval(cases: list[EvalCase], rag_fn) -> dict:
+    """Evaluate retrieval quality: are the right chunks being found?"""
+    results = {"hit_rate": 0, "avg_precision": 0, "details": []}
+
+    for case in cases:
+        response = await rag_fn(case.question)
+        context = response.context.lower()
+
+        found = [kw for kw in case.expected_keywords if kw.lower() in context]
+        precision = len(found) / len(case.expected_keywords) if case.expected_keywords else 0
+
+        results["details"].append({
+            "question": case.question,
+            "precision": precision,
+            "found": found,
+            "missing": [kw for kw in case.expected_keywords if kw.lower() not in context]
+        })
+
+    results["avg_precision"] = sum(d["precision"] for d in results["details"]) / len(cases)
+    results["hit_rate"] = sum(1 for d in results["details"] if d["precision"] > 0.5) / len(cases)
+    return results
+
+# Usage:
+# cases = [
+#     EvalCase("What is the refund policy?", ["refund", "7 days", "return"]),
+#     EvalCase("How to contact support?", ["support", "email", "contact"]),
+# ]
+# results = await evaluate_retrieval(cases, rag_query)
+# print(f"Hit rate: {results['hit_rate']:.0%}")
+# print(f"Avg precision: {results['avg_precision']:.0%}")
+# for d in results['details']:
+#     if d['missing']:
+#         print(f"  MISS: {d['question']} — missing: {d['missing']}")
+```
+
+### TypeScript
+
+```typescript
+interface EvalCase {
+  question: string;
+  expectedKeywords: string[];
+}
+
+async function evaluateRetrieval(
+  cases: EvalCase[],
+  ragFn: (query: string) => Promise<RAGResponse>
+): Promise<{ hitRate: number; avgPrecision: number; details: any[] }> {
+  const details = [];
+
+  for (const testCase of cases) {
+    const response = await ragFn(testCase.question);
+    const context = response.context.toLowerCase();
+
+    const found = testCase.expectedKeywords.filter(kw => context.includes(kw.toLowerCase()));
+    const precision = found.length / testCase.expectedKeywords.length;
+
+    details.push({
+      question: testCase.question,
+      precision,
+      found,
+      missing: testCase.expectedKeywords.filter(kw => !context.includes(kw.toLowerCase()))
+    });
+  }
+
+  return {
+    hitRate: details.filter(d => d.precision > 0.5).length / cases.length,
+    avgPrecision: details.reduce((sum, d) => sum + d.precision, 0) / cases.length,
+    details
+  };
+}
 ```

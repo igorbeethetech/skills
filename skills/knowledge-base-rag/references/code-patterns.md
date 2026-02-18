@@ -7,6 +7,8 @@
 4. [Background Processing](#background-processing)
 5. [Adapting to Existing Projects](#adapting-to-existing-projects)
 6. [Testing](#testing)
+7. [Vector Store Configurations](#vector-store-configurations)
+8. [LangChain Project Structure](#langchain-project-structure)
 
 ---
 
@@ -371,4 +373,238 @@ describe('ragQuery', () => {
     expect(result.context).toContain('7 days');
   });
 });
+```
+
+---
+
+## Vector Store Configurations
+
+Setup patterns for different vector stores using LangChain. Use these when the user
+chooses a vector store other than pgvector.
+
+### Pinecone Setup
+
+```typescript
+// lib/vector-store.ts — Pinecone
+import { PineconeStore } from '@langchain/pinecone';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { Pinecone } from '@pinecone-database/pinecone';
+
+const pinecone = new Pinecone();
+
+export async function getVectorStore() {
+  const index = pinecone.index(process.env.PINECONE_INDEX!);
+  return PineconeStore.fromExistingIndex(
+    new OpenAIEmbeddings({ modelName: 'text-embedding-3-small' }),
+    { pineconeIndex: index }
+  );
+}
+
+// Ingestion
+export async function addToVectorStore(documents: Document[]) {
+  const store = await getVectorStore();
+  await store.addDocuments(documents);
+}
+
+// Search
+export async function searchVectorStore(query: string, k = 10) {
+  const store = await getVectorStore();
+  return store.similaritySearchWithScore(query, k);
+}
+```
+
+```python
+# core/vector_store.py — Pinecone
+from langchain_pinecone import PineconeVectorStore
+from langchain_openai import OpenAIEmbeddings
+import os
+
+def get_vector_store():
+    return PineconeVectorStore(
+        index_name=os.environ["PINECONE_INDEX"],
+        embedding=OpenAIEmbeddings(model="text-embedding-3-small")
+    )
+
+async def add_to_vector_store(documents):
+    store = get_vector_store()
+    await store.aadd_documents(documents)
+
+async def search_vector_store(query: str, k: int = 10):
+    store = get_vector_store()
+    return await store.asimilarity_search_with_score(query, k=k)
+```
+
+### Weaviate Setup
+
+```typescript
+// lib/vector-store.ts — Weaviate
+import { WeaviateStore } from '@langchain/weaviate';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import weaviate from 'weaviate-ts-client';
+
+const client = weaviate.client({
+  scheme: process.env.WEAVIATE_SCHEME || 'http',
+  host: process.env.WEAVIATE_HOST || 'localhost:8080',
+});
+
+export async function getVectorStore() {
+  return WeaviateStore.fromExistingIndex(
+    new OpenAIEmbeddings({ modelName: 'text-embedding-3-small' }),
+    { client, indexName: 'DocumentChunk', textKey: 'content' }
+  );
+}
+```
+
+```python
+# core/vector_store.py — Weaviate
+from langchain_weaviate import WeaviateVectorStore
+from langchain_openai import OpenAIEmbeddings
+import weaviate
+
+client = weaviate.Client(os.environ.get("WEAVIATE_URL", "http://localhost:8080"))
+
+def get_vector_store():
+    return WeaviateVectorStore(
+        client=client,
+        index_name="DocumentChunk",
+        text_key="content",
+        embedding=OpenAIEmbeddings(model="text-embedding-3-small"),
+    )
+```
+
+### Chroma Setup
+
+```typescript
+// lib/vector-store.ts — Chroma
+import { Chroma } from '@langchain/community/vectorstores/chroma';
+import { OpenAIEmbeddings } from '@langchain/openai';
+
+export async function getVectorStore() {
+  return new Chroma(
+    new OpenAIEmbeddings({ modelName: 'text-embedding-3-small' }),
+    {
+      collectionName: 'knowledge-base',
+      url: process.env.CHROMA_URL || 'http://localhost:8000',
+    }
+  );
+}
+```
+
+```python
+# core/vector_store.py — Chroma
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+def get_vector_store():
+    return Chroma(
+        collection_name="knowledge-base",
+        embedding_function=OpenAIEmbeddings(model="text-embedding-3-small"),
+        persist_directory="./chroma_data"  # Or use client mode with url
+    )
+```
+
+### Environment Variables for Vector Stores
+
+```bash
+# pgvector (default)
+DATABASE_URL=postgresql://postgres:password@db.xxx.supabase.co:5432/postgres
+
+# Pinecone
+PINECONE_API_KEY=...
+PINECONE_INDEX=knowledge-base
+
+# Weaviate
+WEAVIATE_URL=http://localhost:8080
+# Or Weaviate Cloud: WEAVIATE_URL=https://xxx.weaviate.network
+
+# Chroma
+CHROMA_URL=http://localhost:8000
+
+# Qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=...  # If using Qdrant Cloud
+```
+
+---
+
+## LangChain Project Structure
+
+Alternative project structure for LangChain-based projects:
+
+### TypeScript (LangChain)
+
+```
+src/
+  chains/
+    rag-chain.ts           — LangChain RAG chain definition
+    ingestion-chain.ts     — Document loading + splitting + embedding chain
+  vectorstore/
+    index.ts               — Vector store factory (pgvector/Pinecone/etc)
+    config.ts              — Store-specific configuration
+  loaders/
+    pdf-loader.ts          — PDF document loader
+    web-loader.ts          — Web scraping loader
+  prompts/
+    rag-prompt.ts          — RAG prompt templates
+    citation-prompt.ts     — Citation-based prompt
+  lib/
+    embeddings.ts          — Embedding model configuration
+    chunker.ts             — Text splitter configuration
+  routes/
+    knowledge.routes.ts    — REST API endpoints
+  index.ts
+schema.sql
+.env
+```
+
+### Python (LangChain)
+
+```
+app/
+  chains/
+    rag_chain.py           — LangChain/LangGraph RAG chain
+    ingestion_chain.py     — Ingestion pipeline chain
+  vectorstore/
+    __init__.py            — Vector store factory
+    pgvector_store.py      — pgvector implementation
+    pinecone_store.py      — Pinecone implementation
+  loaders/
+    pdf_loader.py
+    web_loader.py
+  prompts/
+    rag_prompt.py          — Prompt templates
+  core/
+    embeddings.py          — Embedding model config
+    chunker.py             — Text splitter config
+  routes/
+    knowledge.py           — FastAPI routes
+  main.py
+schema.sql
+requirements.txt
+.env
+```
+
+### Key LangChain Dependencies
+
+```json
+// TypeScript
+{
+  "dependencies": {
+    "@langchain/core": "^0.3",
+    "@langchain/openai": "^0.3",
+    "@langchain/community": "^0.3",
+    "@langchain/pinecone": "^0.1",    // if using Pinecone
+    "langchain": "^0.3"
+  }
+}
+```
+
+```
+# Python
+langchain>=0.3
+langchain-openai>=0.2
+langchain-community>=0.3
+langchain-pinecone>=0.2              # if using Pinecone
+langchain-chroma>=0.2                # if using Chroma
+langgraph>=0.2                       # if using LangGraph
 ```

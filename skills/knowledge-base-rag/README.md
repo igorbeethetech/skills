@@ -22,10 +22,12 @@ When you ask Claude to build a knowledge base or RAG system, this skill is autom
 
 - ✅ **Contextual Chunking** — Each chunk is enriched with full-document context via LLM (Anthropic's technique, -67% retrieval failures)
 - ✅ **Hybrid Search** — Vector (semantic) + BM25 (keyword) search combined
-- ✅ **Reranking** — Optional re-ranking layer for maximum precision
-- ✅ **Query Expansion** — Expands short queries for better recall
+- ✅ **Reranking** — Optional re-ranking layer (Cohere, cross-encoder, Jina) for maximum precision
+- ✅ **Query Expansion & HyDE** — Expands short queries and generates hypothetical answers for better recall
+- ✅ **Advanced RAG Patterns** — Multi-Query Retrieval, Contextual Compression, Parent Document Retriever
 - ✅ **Metadata Filtering** — Filter by category, source type, tenant
 - ✅ **Multi-tenant** — Optional support for multiple clients/tenants
+- ✅ **Evaluation Framework** — Built-in helpers to measure retrieval precision and hit rate
 
 ### Supported knowledge sources
 
@@ -112,8 +114,9 @@ knowledge-base-rag/
 ├── SKILL.md                              ← Entry point (Claude reads first)
 ├── README.md                             ← This file
 └── references/
-    ├── rag-theory.md                     ← RAG theory & best practices (2025)
+    ├── rag-theory.md                     ← RAG theory & best practices (2026)
     ├── sql-schema.md                     ← PostgreSQL + pgvector schema
+    ├── vector-stores.md                  ← Vector DB options (Pinecone, Weaviate, Chroma, Qdrant)
     ├── workflow-ingestion.md             ← [n8n] Ingestion workflows
     ├── workflow-rag-query.md             ← [n8n] RAG search workflow
     ├── n8n-patterns.md                   ← [n8n] JSON structure & node configs
@@ -127,6 +130,7 @@ Claude follows **progressive disclosure** — it only loads what it needs:
 1. **Always reads:** `SKILL.md` + `rag-theory.md` + `sql-schema.md`
 2. **If n8n Mode:** `workflow-ingestion.md`, `workflow-rag-query.md`, `n8n-patterns.md`
 3. **If Code Mode:** `code-ingestion.md`, `code-rag-query.md`, `code-patterns.md`
+4. **If non-pgvector store:** `vector-stores.md`
 
 ---
 
@@ -134,7 +138,7 @@ Claude follows **progressive disclosure** — it only loads what it needs:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| Embedding model | `text-embedding-3-small` | 1536 dims, best cost-to-quality ratio |
+| Embedding model | `text-embedding-3-small` | 1536d. Also: `text-embedding-3-large`, Voyage AI `voyage-3-large`, `bge-large-en-v1.5` |
 | Chunk size | ~800 tokens | Smaller chunks = more precise retrieval |
 | Overlap | ~200 tokens | Prevents splitting ideas across boundaries |
 | Contextual chunking | ✅ Enabled | LLM enriches each chunk with context |
@@ -148,6 +152,18 @@ Claude follows **progressive disclosure** — it only loads what it needs:
 
 ## 🔧 Supported Tech Stack
 
+### Vector Databases
+- **pgvector** (PostgreSQL) — default, no extra infra
+- **Pinecone** — managed serverless, zero ops
+- **Weaviate** — multi-modal, GraphQL API
+- **Chroma** — embedded, great for prototyping
+- **Qdrant** — fast filtered search, Rust-based
+
+### Embedding Models
+- **OpenAI**: `text-embedding-3-small` (1536d), `text-embedding-3-large` (3072d)
+- **Voyage AI**: `voyage-3-large` (1024d), `voyage-code-3` (1024d)
+- **Open-source**: `bge-large-en-v1.5`, `multilingual-e5-large`
+
 ### n8n Mode
 - **n8n** (self-hosted or cloud) + **Supabase** or PostgreSQL with pgvector + **OpenAI API**
 
@@ -155,7 +171,8 @@ Claude follows **progressive disclosure** — it only loads what it needs:
 - **TypeScript**: Express, Next.js API Routes, NestJS
 - **Python**: FastAPI, Flask
 - **ORMs**: pg, Prisma, Drizzle, asyncpg, SQLAlchemy
-- **Supabase** or PostgreSQL with pgvector + **OpenAI API**
+- **Frameworks**: Custom code, LangChain, LangGraph
+- **Supabase** or PostgreSQL with pgvector + **OpenAI API** (or Voyage AI)
 
 ---
 
@@ -167,6 +184,11 @@ The `references/rag-theory.md` file contains a comprehensive guide to modern RAG
 - Why contextual chunking reduces retrieval failures by 49-67%
 - How hybrid search combines semantics + keywords
 - When to use reranking and query expansion
+- Advanced RAG patterns: Multi-Query, Contextual Compression, Parent Document, HyDE
+- Vector database comparison: pgvector, Pinecone, Weaviate, Chroma, Qdrant
+- Advanced chunking strategies: Token-based, Semantic, Markdown Header
+- Prompt engineering for RAG: citation patterns, structured output
+- Evaluation metrics and testing framework
 - Common failure modes and how to fix them
 - Decision framework: prototype vs production vs mission-critical
 

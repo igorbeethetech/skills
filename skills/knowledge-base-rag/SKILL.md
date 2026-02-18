@@ -28,6 +28,33 @@ This skill supports **two output modes**:
 Both modes share the same RAG theory, database schema, and architectural principles.
 The difference is in the implementation layer.
 
+## When to Use This Skill
+
+Use this skill when the user wants to:
+
+- Build a **knowledge base** where users upload documents and an AI answers from them
+- Implement **RAG** (Retrieval-Augmented Generation) in any application
+- Create a **document Q&A** system, FAQ bot, or support assistant grounded in custom data
+- Add **semantic search** or **vector search** to an existing project
+- Build something **like Copilot Studio's Knowledge** feature with their own stack
+- Set up a **document ingestion pipeline** with chunking, embedding, and indexing
+- Integrate **hybrid search** (vector + keyword) into their AI agent or chatbot
+
+This skill covers the full lifecycle: ingestion, chunking, embedding, storage, retrieval, reranking, and context formatting — for both n8n workflow and application code approaches.
+
+## Core Components Overview
+
+Before diving into references, here's what a complete RAG system needs:
+
+| Component | Options | Default |
+|-----------|---------|---------|
+| **Vector Database** | pgvector (PostgreSQL), Pinecone, Weaviate, Chroma, Qdrant | pgvector |
+| **Embedding Model** | OpenAI text-embedding-3-small/large, Voyage AI voyage-3-large, BGE, E5 | text-embedding-3-small |
+| **Chunking Strategy** | Recursive character, Token-based, Semantic, Markdown header | Recursive character |
+| **Search Method** | Vector-only, BM25-only, Hybrid (vector + BM25) | Hybrid |
+| **Reranking** | Cohere Rerank, Cross-encoder (sentence-transformers), Jina Reranker | Optional (Cohere) |
+| **Framework** | Custom code, LangChain, LlamaIndex | Custom code |
+
 ## Quick Reference: What to Read and When
 
 | File | When to read |
@@ -40,6 +67,7 @@ The difference is in the implementation layer.
 | `references/code-ingestion.md` | Code Mode: ingestion service/API implementation |
 | `references/code-rag-query.md` | Code Mode: RAG query service implementation |
 | `references/code-patterns.md` | Code Mode: project structure, libraries, best practices |
+| `references/vector-stores.md` | When user needs non-pgvector stores (Pinecone, Weaviate, Chroma, Qdrant) |
 
 ## What This System Does
 
@@ -224,7 +252,7 @@ Present the generated files with a brief setup guide.
 
 | Parameter | Default | Notes |
 |-----------|---------|-------|
-| Embedding model | `text-embedding-3-small` | 1536 dims, best cost/quality |
+| Embedding model | `text-embedding-3-small` | 1536d. Alternatives: `text-embedding-3-large` (3072d), Voyage AI `voyage-3-large` (1024d), `bge-large-en-v1.5` (1024d) |
 | Chunk size | 800 tokens (~3200 chars) | Smaller = more precise |
 | Chunk overlap | 200 tokens (~800 chars) | Prevents splitting ideas |
 | Contextual chunking | Enabled | LLM enriches each chunk |
@@ -275,3 +303,25 @@ Present the generated files with a brief setup guide.
 │  Query → Embed → Hybrid Search → Rerank → Context    │
 └─────────────────────────────────────────────────────┘
 ```
+
+## Best Practices
+
+1. **Always use hybrid search in production** — Vector-only search misses exact keywords (product codes, acronyms, IDs). Combining vector + BM25 consistently outperforms either alone.
+2. **Enable contextual chunking for any serious use case** — The one-time ingestion cost pays for itself with 49-67% fewer retrieval failures (Anthropic research).
+3. **Keep chunks between 500-1000 tokens** — Too large dilutes embeddings, too small loses context. 800 tokens with 200 overlap is a solid default.
+4. **Use the same embedding model for ingestion AND querying** — Mixing models produces incompatible vector spaces. This is the #1 silent failure mode.
+5. **Retrieve broadly, return precisely** — Fetch 10-20 candidates, then rerank or filter down to the top 5 for the LLM. This dramatically improves answer quality.
+6. **Match BM25 language config to your content** — PostgreSQL text search needs the correct language configuration (`'portuguese'`, `'english'`, etc.) for proper stemming.
+7. **Process ingestion asynchronously for large files** — Return immediately with a status endpoint. Use background processing or a job queue for files > 5MB.
+8. **Add evaluation early** — Track retrieval precision with test queries before going to production. A simple "expected answer in top-5 results" test catches most issues.
+
+## Common Issues & Solutions
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| AI can't find information that's clearly in the documents | Chunks too large, embedding diluted | Reduce chunk size, enable contextual chunking, add BM25 |
+| Search works for some queries but not others | Vector-only misses exact terms | Enable hybrid search with BM25 |
+| AI returns irrelevant information | Threshold too low, no reranking | Increase threshold (0.70→0.80), add reranking, reduce max results |
+| Processing documents takes too long | Large model for contextualization, no batching | Use fast model (Haiku/4o-mini), batch embedding calls |
+| AI hallucinates despite having right context | Too much context confuses LLM | Return fewer, higher-quality chunks (5 max), use reranking |
+| Documents in different languages get mixed up | BM25 config doesn't match language | Set correct PostgreSQL text search configuration |

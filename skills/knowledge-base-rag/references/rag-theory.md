@@ -1,4 +1,4 @@
-# RAG Theory & Best Practices (2025)
+# RAG Theory & Best Practices (2026)
 
 This reference teaches the foundational concepts and modern techniques for building
 production-grade RAG systems. Read this before generating any code — it ensures every
@@ -8,14 +8,20 @@ decision in the pipeline is intentional, not just "the default".
 1. [What RAG Actually Is](#what-rag-actually-is)
 2. [The Three Generations of RAG](#the-three-generations-of-rag)
 3. [Chunking: The Foundation of Everything](#chunking-the-foundation-of-everything)
-4. [Contextual Chunking: The Breakthrough](#contextual-chunking-the-breakthrough)
-5. [Embedding Models: Choosing Wisely](#embedding-models-choosing-wisely)
-6. [Retrieval Strategies](#retrieval-strategies)
-7. [Reranking: The Precision Layer](#reranking-the-precision-layer)
-8. [Query Optimization](#query-optimization)
-9. [The Full Pipeline: Ingestion vs Query Time](#the-full-pipeline)
-10. [Common Failure Modes & How to Avoid Them](#common-failure-modes)
-11. [Decision Framework: When to Use What](#decision-framework)
+4. [Advanced Chunking Strategies](#advanced-chunking-strategies)
+5. [Contextual Chunking: The Breakthrough](#contextual-chunking-the-breakthrough)
+6. [Embedding Models: Choosing Wisely](#embedding-models-choosing-wisely)
+7. [Vector Database Options](#vector-database-options)
+8. [Retrieval Strategies](#retrieval-strategies)
+9. [Reranking: The Precision Layer](#reranking-the-precision-layer)
+10. [Query Optimization](#query-optimization)
+11. [Advanced RAG Patterns](#advanced-rag-patterns)
+12. [The Full Pipeline: Ingestion vs Query Time](#the-full-pipeline)
+13. [Prompt Engineering for RAG](#prompt-engineering-for-rag)
+14. [Evaluation Metrics](#evaluation-metrics)
+15. [Common Failure Modes & How to Avoid Them](#common-failure-modes)
+16. [Decision Framework: When to Use What](#decision-framework)
+17. [Resources](#resources)
 
 ---
 
@@ -116,6 +122,75 @@ trying to break at sentence boundaries. This balances quality, simplicity, and c
 
 ---
 
+## Advanced Chunking Strategies
+
+Beyond the basic strategies above, here are implementation-ready approaches for more
+sophisticated chunking needs.
+
+### Token-based Chunking (using tiktoken)
+
+Token-based chunking ensures each chunk stays within a precise token budget, which is
+critical when working with LLMs that have strict token limits.
+
+```python
+import tiktoken
+
+def token_chunk(text: str, max_tokens: int = 800, overlap: int = 200) -> list[str]:
+    enc = tiktoken.encoding_for_model("gpt-4")
+    tokens = enc.encode(text)
+    chunks = []
+    start = 0
+    while start < len(tokens):
+        end = min(start + max_tokens, len(tokens))
+        chunks.append(enc.decode(tokens[start:end]))
+        start += max_tokens - overlap
+    return chunks
+```
+
+### Semantic Chunking
+
+Semantic chunking groups sentences by meaning similarity, creating topically coherent
+chunks rather than arbitrary splits.
+
+```python
+from sentence_transformers import SentenceTransformer
+import numpy as np
+
+def semantic_chunk(text: str, threshold: float = 0.5) -> list[str]:
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    sentences = text.split(". ")
+    embeddings = model.encode(sentences)
+
+    chunks, current = [], [sentences[0]]
+    for i in range(1, len(sentences)):
+        sim = np.dot(embeddings[i], embeddings[i-1]) / (
+            np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[i-1])
+        )
+        if sim < threshold:
+            chunks.append(". ".join(current) + ".")
+            current = []
+        current.append(sentences[i])
+    if current:
+        chunks.append(". ".join(current) + ".")
+    return chunks
+```
+
+### Markdown Header Chunking
+
+For structured documents, splitting on headers preserves the document's logical
+organization and retains header context as metadata.
+
+```python
+from langchain.text_splitter import MarkdownHeaderTextSplitter
+
+headers = [("#", "h1"), ("##", "h2"), ("###", "h3")]
+splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers)
+chunks = splitter.split_text(markdown_text)
+# Each chunk retains header context as metadata
+```
+
+---
+
 ## Contextual Chunking: The Breakthrough
 
 **This is the single most impactful improvement you can make to a RAG pipeline.**
@@ -181,7 +256,7 @@ with ~200 chunks, that's 200 LLM calls. Mitigations:
 The embedding model converts text into vectors. The choice affects retrieval quality,
 cost, and storage.
 
-### Recommended Models (2025)
+### Recommended Models (2026)
 
 | Model | Dimensions | Quality | Cost | Best For |
 |-------|-----------|---------|------|----------|
@@ -189,6 +264,10 @@ cost, and storage.
 | `text-embedding-3-large` (OpenAI) | 3072 | Excellent | Medium | When precision matters most |
 | Voyage AI `voyage-3` | 1024 | Excellent | Medium | Best retrieval benchmarks |
 | Jina `jina-embeddings-v3` | 1024 | Excellent | Medium | Best for late chunking |
+| `voyage-3-large` (Voyage AI) | 1024 | Excellent | Medium | Best retrieval benchmarks (2026), code-aware variant available |
+| `voyage-code-3` (Voyage AI) | 1024 | Excellent | Medium | Best for code/technical content |
+| `bge-large-en-v1.5` (BAAI) | 1024 | Very Good | Free (self-hosted) | Best open-source option |
+| `multilingual-e5-large` (Microsoft) | 1024 | Very Good | Free (self-hosted) | Best for multilingual content |
 
 ### Critical Rule
 **The SAME model must be used for ingestion AND querying.** Different models produce
@@ -200,6 +279,23 @@ Higher dimensions = more nuance but more storage and slower search. For most use
 - 1536 dims × 4 bytes = 6KB per chunk
 - 100K chunks = ~600MB of vector data
 - This is very manageable for PostgreSQL with HNSW indexing
+
+---
+
+## Vector Database Options
+
+Choosing where to store and query your vectors is a key infrastructure decision. Here
+are the main options:
+
+| Database | Type | Pros | Cons | Best For |
+|----------|------|------|------|----------|
+| **pgvector** | Extension | No extra infra, SQL-native, hybrid search built-in | Scaling limits at millions of vectors | Default choice, Supabase users, < 5M vectors |
+| **Pinecone** | Managed cloud | Zero ops, auto-scaling, serverless option | Vendor lock-in, cost at scale | Teams wanting zero infra management |
+| **Weaviate** | Self-hosted/cloud | GraphQL API, multi-modal, built-in vectorizer | More complex setup | Multi-modal search, large datasets |
+| **Chroma** | Embedded/self-hosted | Simple API, great for prototyping, runs in-process | Not for production scale | Local development, prototyping, small datasets |
+| **Qdrant** | Self-hosted/cloud | Fast filtered search, payload indexing, Rust-based | Smaller community | High-performance filtered search |
+
+> **Note:** This skill defaults to pgvector because it requires no additional infrastructure beyond PostgreSQL. See `references/vector-stores.md` for setup code and migration patterns for other stores.
 
 ---
 
@@ -274,7 +370,7 @@ factory reset, cache reset, etc. Query expansion generates multiple search queri
 Original: "How do I reset?"
 Expanded queries:
 1. "How do I reset my password"
-2. "How to factory reset device"  
+2. "How to factory reset device"
 3. "Reset account settings"
 ```
 
@@ -288,6 +384,142 @@ actual document chunks.
 
 **Use when:** Queries are very short or vague.
 **Skip when:** Queries are already specific, or latency is critical (adds one LLM call).
+
+---
+
+## Advanced RAG Patterns
+
+These patterns go beyond basic retrieval to significantly improve answer quality in
+production systems. Each includes both TypeScript and Python implementations.
+
+### Multi-Query Retrieval
+
+Generate multiple search queries from different angles to improve recall. A single query
+may miss relevant chunks that would be found by rephrasing the question.
+
+**TypeScript:**
+
+```typescript
+// Generate multiple search queries from different angles
+async function multiQueryRetrieval(query: string): Promise<SearchResult[]> {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{
+      role: 'user',
+      content: `Generate 3 different search queries to find information about: "${query}"
+Return only the queries, one per line.`
+    }],
+    temperature: 0.7
+  });
+
+  const queries = [query, ...response.choices[0].message.content!.trim().split('\n')];
+  const allResults = await Promise.all(queries.map(q => hybridSearch(q)));
+
+  // Deduplicate by chunk ID, keep highest score
+  const seen = new Map<string, SearchResult>();
+  for (const result of allResults.flat()) {
+    const existing = seen.get(result.chunkId);
+    if (!existing || result.combinedScore > existing.combinedScore) {
+      seen.set(result.chunkId, result);
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.combinedScore - a.combinedScore);
+}
+```
+
+**Python:**
+
+```python
+async def multi_query_retrieval(query: str) -> list[dict]:
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f'Generate 3 different search queries to find information about: "{query}"\nReturn only the queries, one per line.'}],
+        temperature=0.7
+    )
+    queries = [query] + response.choices[0].message.content.strip().split("\n")
+    all_results = [await hybrid_search(q) for q in queries]
+
+    seen = {}
+    for result in [r for results in all_results for r in results]:
+        if result["chunk_id"] not in seen or result["combined_score"] > seen[result["chunk_id"]]["combined_score"]:
+            seen[result["chunk_id"]] = result
+    return sorted(seen.values(), key=lambda r: r["combined_score"], reverse=True)
+```
+
+### Contextual Compression
+
+After retrieval, compress each chunk to only the parts relevant to the query. This
+reduces noise in the LLM context and improves answer quality.
+
+**TypeScript:**
+
+```typescript
+// After retrieval, compress each chunk to only the relevant parts
+async function contextualCompress(query: string, chunks: string[]): Promise<string[]> {
+  const compressed = await Promise.all(chunks.map(async (chunk) => {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'user',
+        content: `Given the question: "${query}"
+Extract ONLY the parts of this text that are relevant to answering the question. If nothing is relevant, return "NOT_RELEVANT".
+
+Text: ${chunk}`
+      }],
+      max_tokens: 500
+    });
+    return response.choices[0].message.content!.trim();
+  }));
+  return compressed.filter(c => c !== 'NOT_RELEVANT');
+}
+```
+
+### Parent Document Retriever
+
+The Parent Document Retriever pattern solves the tension between small chunks (better
+for precise retrieval) and large chunks (better for full context). The approach works
+in two stages:
+
+**At ingestion time:**
+- Create two levels of chunks: small chunks (~200 tokens) for embedding, and parent
+  chunks (~1500 tokens) for context
+- Each small chunk stores a reference (parent_id) to its parent chunk
+- Only the small chunks are embedded and indexed for search
+
+**At query time:**
+- Search is performed against the small chunks for precise matching
+- When a small chunk matches, its parent chunk is fetched and returned instead
+- This gives the LLM the full surrounding context while maintaining retrieval precision
+
+This pattern is especially useful for long documents where a single paragraph might
+match the query but the LLM needs the surrounding paragraphs to give a complete answer.
+
+### HyDE Implementation
+
+Expanding on the HyDE theory from Query Optimization, here is a concrete implementation.
+By generating a hypothetical answer and embedding it instead of the raw query, we get
+embeddings that are much closer to the actual document chunks in vector space.
+
+**TypeScript:**
+
+```typescript
+async function hydeSearch(query: string): Promise<SearchResult[]> {
+  // Generate a hypothetical answer
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{
+      role: 'user',
+      content: `Write a short paragraph that would answer this question: "${query}"
+Write as if you know the answer. Be specific and detailed.`
+    }],
+    max_tokens: 200
+  });
+
+  const hypothetical = response.choices[0].message.content!;
+  const embedding = await generateEmbedding(hypothetical);
+  return hybridSearch(embedding, query);
+}
+```
 
 ---
 
@@ -321,6 +553,117 @@ but run only ONCE per document. This is where you invest compute.
 
 Query time must be fast (<2 seconds total). This is why we pre-compute everything
 at ingestion and keep query-time processing minimal.
+
+---
+
+## Prompt Engineering for RAG
+
+The prompt template used to combine retrieved context with the user's question has a
+significant impact on answer quality. Here are proven templates.
+
+### Citation-based Prompt
+
+This template forces the LLM to cite its sources, making answers verifiable and reducing
+hallucination.
+
+```
+You are a helpful assistant. Answer the user's question using ONLY the provided context.
+
+Rules:
+- Cite your sources using [Source N] notation
+- If the context doesn't contain enough information, say so
+- Never make up information not present in the sources
+
+Context:
+{context}
+
+Question: {question}
+```
+
+### Structured Output Prompt
+
+When you need programmatic access to the response (e.g., for confidence thresholds or
+follow-up suggestions), use a structured output format.
+
+```
+Answer the question based on the context. Return your response as JSON:
+{
+  "answer": "your answer here",
+  "confidence": 0.0-1.0,
+  "sources_used": [1, 3],
+  "follow_up_questions": ["question 1", "question 2"]
+}
+
+Context:
+{context}
+
+Question: {question}
+```
+
+---
+
+## Evaluation Metrics
+
+Measuring RAG quality requires evaluating both retrieval and generation. Without
+evaluation, you are flying blind — you cannot improve what you do not measure.
+
+### Key Metrics
+
+- **Context Precision**: Are the retrieved chunks actually relevant to the question?
+  High precision means less noise in the LLM context. Measured as the proportion of
+  retrieved chunks that are actually relevant.
+
+- **Context Recall**: Did we find all the relevant chunks? High recall means we are
+  not missing important information. Measured as the proportion of relevant chunks
+  that were actually retrieved.
+
+- **Answer Faithfulness**: Is the answer grounded in the retrieved context? A faithful
+  answer only makes claims that are supported by the retrieved chunks. Low faithfulness
+  indicates hallucination.
+
+- **Answer Relevance**: Does the answer actually address the question? An answer can
+  be faithful to the context but still fail to answer what was asked.
+
+### Evaluation Framework
+
+```python
+# Simple RAG evaluation framework
+from dataclasses import dataclass
+
+@dataclass
+class EvalCase:
+    question: str
+    expected_answer: str
+    expected_source_keywords: list[str]  # keywords that should appear in retrieved chunks
+
+async def evaluate_rag(cases: list[EvalCase], rag_fn) -> dict:
+    results = {"precision": [], "recall": [], "found": 0, "total": len(cases)}
+
+    for case in cases:
+        response = await rag_fn(case.question)
+
+        # Check if expected keywords appear in retrieved context
+        context = response.context.lower()
+        found_keywords = [kw for kw in case.expected_source_keywords if kw.lower() in context]
+
+        precision = len(found_keywords) / max(len(case.expected_source_keywords), 1)
+        results["precision"].append(precision)
+
+        if precision > 0.5:
+            results["found"] += 1
+
+    results["avg_precision"] = sum(results["precision"]) / len(results["precision"])
+    results["hit_rate"] = results["found"] / results["total"]
+    return results
+
+# Usage:
+# cases = [
+#     EvalCase("What is the refund policy?", "7 days", ["refund", "7 days", "return"]),
+#     EvalCase("How to contact support?", "email support@example.com", ["support", "email", "contact"]),
+# ]
+# results = await evaluate_rag(cases, rag_query)
+# print(f"Hit rate: {results['hit_rate']:.0%}, Avg precision: {results['avg_precision']:.0%}")
+```
 
 ---
 
@@ -381,3 +724,14 @@ If your total content is < 200,000 tokens (~500 pages), consider just stuffing
 everything into the LLM context window instead of RAG. Modern models handle 128K+
 tokens. This avoids all retrieval complexity. Only use RAG when the knowledge base
 is too large to fit in context.
+
+---
+
+## Resources
+
+- [Anthropic: Introducing Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) — the research behind contextual chunking
+- [pgvector Documentation](https://github.com/pgvector/pgvector) — PostgreSQL vector extension
+- [LangChain RAG Tutorial](https://python.langchain.com/docs/tutorials/rag/) — LangChain's official RAG guide
+- [RAGAS Evaluation Framework](https://docs.ragas.io/) — automated RAG evaluation
+- [Voyage AI](https://www.voyageai.com/) — state-of-the-art embedding models
+- [Chunking Strategies Comparison](https://www.pinecone.io/learn/chunking-strategies/) — Pinecone's chunking guide

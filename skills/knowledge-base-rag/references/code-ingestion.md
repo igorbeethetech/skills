@@ -7,11 +7,14 @@ TypeScript and Python. The logic mirrors the n8n workflow but as composable func
 1. [Architecture](#architecture)
 2. [Text Extraction](#text-extraction)
 3. [Chunking](#chunking)
-4. [Contextual Chunking](#contextual-chunking)
-5. [Embedding Generation](#embedding-generation)
-6. [Storage](#storage)
-7. [Unified Ingestion Pipeline](#unified-ingestion-pipeline)
-8. [API Endpoints](#api-endpoints)
+4. [LangChain Text Splitter Alternatives](#langchain-text-splitter-alternatives)
+5. [LangChain Document Loader Patterns](#langchain-document-loader-patterns)
+6. [Contextual Chunking](#contextual-chunking)
+7. [Embedding Generation](#embedding-generation)
+8. [Configurable Embedding Provider](#configurable-embedding-provider)
+9. [Storage](#storage)
+10. [Unified Ingestion Pipeline](#unified-ingestion-pipeline)
+11. [API Endpoints](#api-endpoints)
 
 ---
 
@@ -272,6 +275,126 @@ def chunk_text(
     return chunks
 ```
 
+### LangChain Text Splitter Alternatives
+
+If using LangChain, you can replace the custom chunker with LangChain's built-in splitters:
+
+#### RecursiveCharacterTextSplitter (default recommendation)
+```python
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=3200,      # ~800 tokens
+    chunk_overlap=800,    # ~200 tokens
+    separators=["\n\n", "\n", ". ", " ", ""]
+)
+chunks = splitter.split_text(text)
+```
+
+```typescript
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
+
+const splitter = new RecursiveCharacterTextSplitter({
+  chunkSize: 3200,
+  chunkOverlap: 800,
+  separators: ['\n\n', '\n', '. ', ' ', '']
+});
+const chunks = await splitter.splitText(text);
+```
+
+#### TokenTextSplitter (precise token counting)
+```python
+from langchain.text_splitter import TokenTextSplitter
+
+splitter = TokenTextSplitter(
+    chunk_size=800,       # Actual token count
+    chunk_overlap=200,
+    encoding_name="cl100k_base"  # GPT-4 tokenizer
+)
+chunks = splitter.split_text(text)
+```
+
+#### SemanticChunker (groups by embedding similarity)
+```python
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_openai import OpenAIEmbeddings
+
+splitter = SemanticChunker(
+    OpenAIEmbeddings(model="text-embedding-3-small"),
+    breakpoint_threshold_type="percentile"
+)
+chunks = splitter.split_text(text)
+```
+
+#### MarkdownHeaderTextSplitter (for markdown content)
+```python
+from langchain.text_splitter import MarkdownHeaderTextSplitter
+
+headers = [("#", "Header 1"), ("##", "Header 2"), ("###", "Header 3")]
+splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers)
+chunks = splitter.split_text(markdown_text)
+# Each chunk includes header metadata for filtering
+```
+
+---
+
+### LangChain Document Loader Patterns
+
+LangChain provides document loaders that handle extraction and basic splitting:
+
+```python
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    Docx2txtLoader,
+    TextLoader,
+    WebBaseLoader,
+    UnstructuredMarkdownLoader,
+)
+
+# PDF
+loader = PyPDFLoader("document.pdf")
+pages = loader.load()  # One Document per page
+
+# DOCX
+loader = Docx2txtLoader("document.docx")
+docs = loader.load()
+
+# URL
+loader = WebBaseLoader("https://example.com/article")
+docs = loader.load()
+
+# Markdown
+loader = UnstructuredMarkdownLoader("document.md")
+docs = loader.load()
+
+# Directory of mixed files
+from langchain_community.document_loaders import DirectoryLoader
+
+loader = DirectoryLoader(
+    "./documents/",
+    glob="**/*.{pdf,docx,txt,md}",
+    show_progress=True
+)
+docs = loader.load()
+```
+
+```typescript
+import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
+import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
+import { TextLoader } from 'langchain/document_loaders/fs/text';
+import { CheerioWebBaseLoader } from '@langchain/community/document_loaders/web/cheerio';
+
+// PDF
+const loader = new PDFLoader('document.pdf');
+const pages = await loader.load();
+
+// URL
+const webLoader = new CheerioWebBaseLoader('https://example.com');
+const docs = await webLoader.load();
+```
+
+> **When to use LangChain loaders vs custom extractors:** LangChain loaders are convenient but less configurable. Use custom extractors (as shown earlier in this reference) when you need fine control over extraction, error handling, or when adding to an existing non-LangChain codebase.
+
 ---
 
 ## Contextual Chunking
@@ -472,6 +595,96 @@ async def generate_embeddings(texts: list[str]) -> list[list[float]]:
         embeddings.extend([d.embedding for d in response.data])
     return embeddings
 ```
+
+### Configurable Embedding Provider
+
+Support multiple embedding providers by abstracting the embedding client:
+
+#### TypeScript
+```typescript
+// embeddings.ts — Multi-provider support
+import OpenAI from 'openai';
+
+type EmbeddingProvider = 'openai' | 'voyage';
+
+interface EmbeddingConfig {
+  provider: EmbeddingProvider;
+  model: string;
+  dimensions: number;
+  apiKey?: string;
+}
+
+const PRESETS: Record<string, EmbeddingConfig> = {
+  'text-embedding-3-small': { provider: 'openai', model: 'text-embedding-3-small', dimensions: 1536 },
+  'text-embedding-3-large': { provider: 'openai', model: 'text-embedding-3-large', dimensions: 3072 },
+  'voyage-3-large': { provider: 'voyage', model: 'voyage-3-large', dimensions: 1024 },
+  'voyage-code-3': { provider: 'voyage', model: 'voyage-code-3', dimensions: 1024 },
+};
+
+export function createEmbeddingClient(modelName: string = 'text-embedding-3-small') {
+  const config = PRESETS[modelName] || PRESETS['text-embedding-3-small'];
+
+  if (config.provider === 'voyage') {
+    // Voyage AI uses OpenAI-compatible API
+    const client = new OpenAI({
+      apiKey: process.env.VOYAGE_API_KEY,
+      baseURL: 'https://api.voyageai.com/v1'
+    });
+    return {
+      model: config.model,
+      dimensions: config.dimensions,
+      generate: async (texts: string[]) => {
+        const response = await client.embeddings.create({ model: config.model, input: texts });
+        return response.data.map(d => d.embedding);
+      }
+    };
+  }
+
+  // Default: OpenAI
+  const client = new OpenAI();
+  return {
+    model: config.model,
+    dimensions: config.dimensions,
+    generate: async (texts: string[]) => {
+      const response = await client.embeddings.create({ model: config.model, input: texts });
+      return response.data.map(d => d.embedding);
+    }
+  };
+}
+```
+
+#### Python
+```python
+# embeddings.py — Multi-provider support
+from openai import AsyncOpenAI
+import os
+
+PRESETS = {
+    "text-embedding-3-small": {"provider": "openai", "model": "text-embedding-3-small", "dimensions": 1536},
+    "text-embedding-3-large": {"provider": "openai", "model": "text-embedding-3-large", "dimensions": 3072},
+    "voyage-3-large": {"provider": "voyage", "model": "voyage-3-large", "dimensions": 1024},
+    "voyage-code-3": {"provider": "voyage", "model": "voyage-code-3", "dimensions": 1024},
+}
+
+def create_embedding_client(model_name: str = "text-embedding-3-small"):
+    config = PRESETS.get(model_name, PRESETS["text-embedding-3-small"])
+
+    if config["provider"] == "voyage":
+        client = AsyncOpenAI(
+            api_key=os.environ["VOYAGE_API_KEY"],
+            base_url="https://api.voyageai.com/v1"
+        )
+    else:
+        client = AsyncOpenAI()
+
+    async def generate(texts: list[str]) -> list[list[float]]:
+        response = await client.embeddings.create(model=config["model"], input=texts)
+        return [d.embedding for d in response.data]
+
+    return {"model": config["model"], "dimensions": config["dimensions"], "generate": generate}
+```
+
+> **Note:** When using Voyage AI or other non-OpenAI models, remember to update the `VECTOR(1536)` dimension in your SQL schema to match (e.g., `VECTOR(1024)` for Voyage AI models).
 
 ---
 
