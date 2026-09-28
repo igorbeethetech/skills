@@ -12,6 +12,11 @@ Thumbs.db
 output/
 *.json
 !**/SKILL.md
+!skills/*/package.json
+
+# Render outputs of skills that generate media
+.frames/
+out/
 
 # Node/Python artifacts (in case any skill has scripts)
 node_modules/

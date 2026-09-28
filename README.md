@@ -17,6 +17,7 @@ Each skill is a self-contained package that teaches Claude how to build specific
 | Skill | Description | Status |
 |-------|-------------|--------|
 | [**knowledge-base-rag**](skills/knowledge-base-rag/) | Build complete Knowledge Base systems with advanced RAG (contextual chunking, hybrid search, reranking). Supports n8n workflows or application code (TS/Python). | Stable |
+| [**motion-promo-video**](skills/motion-promo-video/) | Create motion-design promo videos (Reels/TikTok/Shorts/16:9) of any software product from its repo, a description or just screenshots — kinetic type, floating UI objects, cursor interactions and a synced synthesized soundtrack, rendered deterministically at 60 fps. | Stable |
 
 > More skills coming soon. See the [Roadmap](#roadmap) below.
 
@@ -126,21 +127,30 @@ skills/
 ├── LICENSE                          <- MIT License
 │
 └── skills/
-    └── knowledge-base-rag/          <- RAG & Knowledge Base skill
+    ├── knowledge-base-rag/          <- RAG & Knowledge Base skill
+    │   ├── SKILL.md                     Entry point (Claude reads this)
+    │   ├── README.md                    Skill documentation
+    │   └── references/
+    │       ├── rag-theory.md            RAG concepts & best practices
+    │       ├── sql-schema.md            PostgreSQL + pgvector schema
+    │       ├── workflow-ingestion.md    [n8n] Ingestion workflows
+    │       ├── workflow-rag-query.md    [n8n] Query workflow
+    │       ├── n8n-patterns.md          [n8n] JSON & node patterns
+    │       ├── code-ingestion.md        [Code] Ingestion service (TS/Python)
+    │       ├── code-rag-query.md        [Code] Query service (TS/Python)
+    │       └── code-patterns.md         [Code] Project patterns
+    │
+    └── motion-promo-video/          <- Motion-design promo video skill
         ├── SKILL.md                     Entry point (Claude reads this)
         ├── README.md                    Skill documentation
-        └── references/
-            ├── rag-theory.md            RAG concepts & best practices
-            ├── sql-schema.md            PostgreSQL + pgvector schema
-            ├── workflow-ingestion.md    [n8n] Ingestion workflows
-            ├── workflow-rag-query.md    [n8n] Query workflow
-            ├── n8n-patterns.md          [n8n] JSON & node patterns
-            ├── code-ingestion.md        [Code] Ingestion service (TS/Python)
-            ├── code-rag-query.md        [Code] Query service (TS/Python)
-            └── code-patterns.md         [Code] Project patterns
+        ├── package.json                 playwright + gsap (run npm install once)
+        ├── runtime/motion.js            Motion API (animations + automatic sound cues)
+        ├── templates/                   Scene template + preview page
+        ├── scripts/                     doctor, new, fonts, palette, crop, preview, render
+        └── references/                  Brand extraction, storyboard, API, components, audio, troubleshooting
 ```
 
-Each skill is **fully self-contained** in its own folder. No shared dependencies between skills.
+Each skill is **fully self-contained** in its own folder. No shared dependencies between skills. Skills with scripts (like `motion-promo-video`) declare their dependencies in their own `package.json` — run `npm install` inside the skill folder after copying it.
 
 ---
 

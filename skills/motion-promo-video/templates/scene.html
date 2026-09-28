@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Promo — scene</title>
+<link rel="stylesheet" href="assets/fonts.css">
+<style>
+  /* ═══ 1. BRAND TOKENS — replace with the product's real tokens (repo CSS/Tailwind theme, or sampled from the screenshot) ═══ */
+  :root {
+    --W: 1080px; --H: 1920px;                         /* keep in sync with Motion.init({ size }) */
+    --paper: #ffffff;                                  /* background (white by default: product-ad look) */
+    --ink: #111827; --ink-2: #374151; --muted: #6b7280; --line: #e5e7eb;
+    --brand: #4f46e5; --brand-2: #4338ca; --on-brand: #ffffff;
+    --accent: #c4f23a;                                 /* highlighter behind headline words + CTA */
+    --accent-2: #fbbf24;
+    --on-accent: #111827;
+    --cursor: #111827;
+    --display: "Bricolage Grotesque", system-ui, sans-serif;
+    --body: "Figtree", system-ui, sans-serif;
+    --head: 138px;                                     /* headline size (~13% of the short side); ≤ 11 characters per line at 138px in 9:16 */
+    --radius: 44px;
+    --sh-1: 0 1px 2px rgba(17,24,39,.06), 0 6px 14px rgba(17,24,39,.07), 0 30px 60px -20px rgba(17,24,39,.28);
+    --sh-2: 0 2px 4px rgba(17,24,39,.08), 0 18px 36px rgba(17,24,39,.10), 0 60px 110px -30px rgba(17,24,39,.40);
+  }
+
+  /* ═══ 2. STAGE (don't change the structure: #stage > #bg, #glow, #camera > .scene…) ═══ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: var(--W); height: var(--H); overflow: hidden; background: var(--paper); }
+  body { font-family: var(--body); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: relative; width: var(--W); height: var(--H); overflow: hidden; background: var(--paper); }
+  #bg { position: absolute; inset: -200px; background-image: radial-gradient(circle, color-mix(in srgb, var(--ink) 9%, transparent) 2.2px, transparent 2.6px); background-size: 44px 44px; }
+  #glow { position: absolute; width: 1400px; height: 1400px; left: -160px; top: 25%; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%); }
+  #camera { position: absolute; inset: 0; }
+  .scene { position: absolute; inset: 0; visibility: hidden; perspective: 2200px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 70px; padding: 260px 60px 300px; } /* 9:16 safe area */
+  [data-format="16:9"] .scene, [data-format="1:1"] .scene { padding: 90px 120px; }
+  [data-format="16:9"] .scene.split { flex-direction: row; gap: 110px; }
+  .scene.free { display: block; padding: 0; }   /* absolute canvas: position children with left/top (diagrams, orbits, collages) */
+  .scene.opaque { background: var(--paper) radial-gradient(circle, color-mix(in srgb, var(--ink) 9%, transparent) 2.2px, transparent 2.6px) 0 0 / 44px 44px; } /* needed by M.reveal (static grid, no drift) */
+  .fl { position: relative; } /* idle-float wrapper: M.idle() on .fl, entrances on the child */
+  .orbit { position: absolute; }  /* orbiting object: <div class="fl orbit" style="left:…;top:…"><span class="chip">…</span></div> — only the wrapper is absolute */
+
+  /* ═══ 3. COMPONENT KIT — rebuild the product's key UI pieces with these (or crop them from a screenshot into .shot) ═══ */
+  .head { font-family: var(--display); font-weight: 800; font-size: var(--head); text-transform: uppercase; letter-spacing: -.01em; text-align: center; color: var(--ink); }
+  /* script/handwritten brand fonts: sentence case and ~15% smaller — .head.script */
+  .head.script { text-transform: none; letter-spacing: 0; font-size: calc(var(--head) * .85); }
+  .kicker { font-weight: 700; font-size: 30px; letter-spacing: .2em; text-transform: uppercase; color: var(--brand); background: color-mix(in srgb, var(--brand) 9%, white);
+    border: 2px solid color-mix(in srgb, var(--brand) 22%, white); padding: 12px 30px; border-radius: 999px; white-space: nowrap; }
+  .card { background: #fff; border-radius: var(--radius); box-shadow: var(--sh-2); padding: 48px 52px; width: 860px; }
+  .card h3 { font-family: var(--display); font-size: 58px; font-weight: 800; line-height: 1.05; }
+  .card p { font-size: 34px; color: var(--muted); margin-top: 10px; }
+  .row { display: flex; align-items: center; gap: 22px; }
+  .pill { display: inline-flex; align-items: center; gap: 14px; height: 110px; padding: 0 42px; border-radius: 999px; white-space: nowrap; background: var(--ink); color: #fff;
+    font-family: var(--display); font-weight: 700; font-size: 48px; box-shadow: var(--sh-1); }
+  .chip { display: inline-flex; align-items: center; gap: 14px; height: 92px; padding: 0 34px; border-radius: 999px; white-space: nowrap; background: #fff; box-shadow: var(--sh-1);
+    font-weight: 700; font-size: 36px; color: var(--ink); }
+  .chip.good { background: #dcfce7; color: #15803d; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 18px; height: 150px; padding: 0 70px; border-radius: 999px; background: var(--brand); color: var(--on-brand);
+    font-family: var(--display); font-weight: 800; font-size: 54px; white-space: nowrap; box-shadow: 0 24px 60px -18px color-mix(in srgb, var(--brand) 70%, transparent); }
+  .btn.cta { background: var(--accent); color: var(--on-accent); height: 176px; font-size: 64px; text-transform: uppercase; box-shadow: 0 0 0 8px #fff, 0 30px 70px -18px color-mix(in srgb, var(--accent) 80%, black); }
+  .badge { display: grid; place-items: center; width: 160px; height: 160px; border-radius: 42px; font-family: var(--display); font-weight: 800; font-size: 96px; color: #fff;
+    background: linear-gradient(145deg, var(--brand), var(--brand-2)); box-shadow: inset 0 3px 0 rgba(255,255,255,.35), var(--sh-1); }
+  .avatar { width: 84px; height: 84px; border-radius: 50%; border: 5px solid #fff; margin-left: -22px; box-shadow: var(--sh-1); }
+  .progress { height: 22px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 30px; }
+  .progress i { display: block; height: 100%; width: 100%; background: var(--brand); transform-origin: 0 50%; }
+  .toast { display: inline-flex; align-items: center; gap: 18px; padding: 26px 40px; border-radius: 32px; background: var(--ink); color: #fff; font-size: 36px; font-weight: 600; box-shadow: var(--sh-2); }
+  .shot { display: block; border-radius: var(--radius); box-shadow: var(--sh-2); overflow: hidden; background: #fff; }  /* <img class="shot"> = a cropped piece of a screenshot */
+  .phone { width: 560px; height: 1140px; border-radius: 86px; padding: 22px; background: #0b0b0f; box-shadow: var(--sh-2); }
+  .phone > * { width: 100%; height: 100%; border-radius: 66px; overflow: hidden; object-fit: cover; }
+  .logo { width: 260px; height: 260px; border-radius: 64px; display: grid; place-items: center; background: var(--brand); box-shadow: 0 30px 60px -20px color-mix(in srgb, var(--brand) 70%, transparent); }
+  .word { font-family: var(--display); font-weight: 800; font-size: 220px; line-height: .9; letter-spacing: -.02em; }
+  .tag { font-size: 48px; font-weight: 600; color: var(--ink-2); text-align: center; }
+  /* 3D flip card for match cuts (M.flipTo): front and back faces */
+  .flip { position: relative; transform-style: preserve-3d; }
+  .face { position: absolute; inset: 0; border-radius: var(--radius); backface-visibility: hidden; overflow: hidden; }
+  .face.back { transform: rotateY(180deg); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div><div id="glow"></div>
+  <div id="camera">
+
+    <!-- SCENE 1 — HOOK: one bold promise -->
+    <section class="scene" id="s1">
+      <p class="kicker" id="k1" data-t="kicker"></p>
+      <h1 class="head" id="h1"></h1>
+      <div class="fl" id="icon-fl"><div class="logo" id="icon"><svg width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-25 12 12)"/></svg></div></div>
+    </section>
+
+    <!-- SCENE 2 — FEATURE: the product's key object + one interaction -->
+    <section class="scene" id="s2">
+      <h2 class="head" id="h2"></h2>
+      <div class="fl" id="card-fl">
+        <article class="card" id="card">
+          <div class="row" style="justify-content:space-between"><h3 data-t="cardTitle"></h3><span class="chip good" id="status" data-t="status"></span></div>
+          <p data-t="cardSub"></p>
+          <div class="progress"><i id="bar"></i></div>
+          <div class="row" style="margin-top:34px;justify-content:space-between">
+            <div class="row" style="padding-left:22px"><span class="avatar" style="background:#f9a8d4"></span><span class="avatar" style="background:#93c5fd"></span><span class="avatar" style="background:#fcd34d"></span></div>
+            <span class="btn" id="btn" data-t="btn"></span>
+          </div>
+        </article>
+      </div>
+      <div class="row" id="chips"><span class="chip" data-t="chip1"></span><span class="chip" data-t="chip2"></span></div>
+      <div class="toast" id="toast"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span data-t="toast"></span></div>
+    </section>
+
+    <!-- SCENE 3 — PAYOFF: the result, with a number -->
+    <section class="scene" id="s3">
+      <h2 class="head" id="h3"></h2>
+      <div class="fl" id="stat-fl"><div class="badge" id="stat" style="width:auto;padding:0 60px;height:260px;font-size:190px">0</div></div>
+      <p class="tag" data-t="statLabel"></p>
+    </section>
+
+    <!-- SCENE 4 — LOGO + CTA (held ≥ 1.5 s) -->
+    <section class="scene" id="s4">
+      <div class="fl" id="logo-fl"><div class="logo" id="logo"><svg width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-25 12 12)"/></svg></div></div>
+      <span class="ln" style="font-size:220px"><span class="word" id="word" data-t="brand"></span></span>
+      <p class="tag" data-t="tag"></p>
+      <div class="fl" id="cta-fl"><span class="btn cta" id="cta"><span data-t="cta"></span><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span></div>
+    </section>
+
+  </div>
+</div>
+
+<script src="assets/gsap.min.js"></script>
+<script src="assets/motion.js"></script>
+<script>
+// ═══ 4. COPY (i18n) — all on-screen text lives here. *word* = highlighter, ^word^ = second highlighter. ═══
+const COPY = {
+  "pt-BR": {
+    kicker: "Gestão de projetos", h1: ["Seu time", "*em órbita.*"], h2: ["Tudo num", "*só lugar*"], h3: ["Entregue", "*mais rápido*"],
+    cardTitle: "Lançamento Q4", status: "No prazo", cardSub: "12 tarefas · 3 pessoas", btn: "Concluir", chip1: "Prazos automáticos", chip2: "Tempo real",
+    toast: "Tarefa concluída!", statLabel: "menos tempo em reuniões", brand: "Orbit", tag: "Teste grátis por 14 dias", cta: "Começar agora",
+  },
+  en: {
+    kicker: "Project management", h1: ["Your team", "*in orbit.*"], h2: ["All in", "*one place*"], h3: ["Ship", "*faster*"],
+    cardTitle: "Q4 launch", status: "On track", cardSub: "12 tasks · 3 people", btn: "Complete", chip1: "Auto deadlines", chip2: "Real time",
+    toast: "Task completed!", statLabel: "less time in meetings", brand: "Orbit", tag: "Free for 14 days", cta: "Start now",
+  },
+};
+
+// ═══ 5. TIMELINE — one paused timeline; every helper also schedules its sound effect ═══
+Motion.init({
+  size: [1080, 1920],
+  fonts: ["800 138px 'Bricolage Grotesque'", "700 48px 'Bricolage Grotesque'", "400 36px Figtree", "600 36px Figtree", "700 36px Figtree"],
+  seed: 7,
+  music: { bpm: 118, key: "C", mode: "major", intro: 2.3 },
+});
+const T = Motion.copy(COPY);
+Motion.lines("#h1", T.h1); Motion.lines("#h2", T.h2); Motion.lines("#h3", T.h3);
+
+Motion.build((M) => {
+  // measure BEFORE any tween (layout positions, unaffected by animation)
+  const P = M.measure({ btn: "#btn", card: "#card", stat: "#stat", word: "#word" });
+
+  // ── 1. Hook 0 → 2.4
+  M.show("#s1", 0);
+  M.breathe(0, 2.4, { from: 1.06, to: 1, rot: -0.6 });
+  M.pop("#k1", 0.05);
+  M.head("#h1", 0.15);
+  M.tilt("#icon", 0.55, { axis: "y", deg: -70, y: 160 });
+  M.idle("#icon-fl", 1.3, 1.1, { amp: 16, rot: 3, period: 0.55 });
+  M.headOut("#h1", 2.05);
+  M.tl.to(["#k1", "#icon"], { autoAlpha: 0, scale: 0.6, duration: 0.3, ease: "power3.in" }, 2.1);
+  M.hide("#s1", 2.5);
+
+  // ── 2. Feature 2.4 → 6.4: card tilts in, cursor clicks the button, toast confirms
+  M.show("#s2", 2.35);
+  M.breathe(2.35, 4.1, { from: 1, to: 1.05 });
+  M.head("#h2", 2.4);
+  M.tilt("#card", 2.6);
+  M.tl.fromTo("#bar", { scaleX: 0.1 }, { scaleX: 0.72, duration: 0.9, ease: "power3.out" }, 3.1);
+  M.pop("#chips .chip", 3.2, { rotation: (i) => (i ? 4 : -4) });
+  M.idle("#card-fl", 3.4, 2.6, { amp: 10, rot: 0.6 });
+  M.cursor.in(3.4);
+  M.cursor.move({ x: P.btn.cx + 20, y: P.btn.cy + 30 }, 3.45, 0.8);
+  M.cursor.click(4.3, { target: "#btn" });
+  M.tl.to("#bar", { scaleX: 1, duration: 0.5, ease: "power3.out" }, 4.35);
+  M.pop("#toast", 4.45, { pitch: 1.3 });
+  M.confetti({ x: P.btn.cx, y: P.btn.cy }, 4.4, { n: 36 });
+  M.cursor.out(5.2);
+  M.headOut("#h2", 5.9);
+  M.tl.to(["#card-fl", "#chips", "#toast"], { y: "+=240", autoAlpha: 0, duration: 0.4, ease: "power3.in", stagger: 0.04 }, 5.95);
+  M.hide("#s2", 6.45);
+
+  // ── 3. Payoff 6.4 → 9.0: big number counts up, impact
+  M.show("#s3", 6.4);
+  M.breathe(6.4, 2.7, { from: 1.04, to: 1 });
+  M.head("#h3", 6.45);
+  M.pop("#stat", 6.8);
+  M.count("#stat", 0, 40, 6.9, 1.1, { fmt: (v) => `-${Math.round(v)}%` });
+  M.impact(8.0);
+  M.shake("#stat-fl", 8.0);
+  M.confetti({ x: P.stat.cx, y: P.stat.cy }, 8.0);
+  M.idle("#stat-fl", 8.1, 0.8, { amp: 10, rot: 1 });
+  M.headOut("#h3", 8.65);
+  M.tl.to("#stat-fl", { scale: 0, autoAlpha: 0, duration: 0.4, ease: "power3.in" }, 8.7);
+  M.hide("#s3", 9.15);
+
+  // ── 4. Logo + CTA 9.0 → end (hold ≥ 1.5 s)
+  M.show("#s4", 9.0);
+  M.tl.fromTo("#logo", { scale: 0, rotation: -120 }, { scale: 1, rotation: 0, duration: 0.6, ease: "back.out(2)" }, 9.02);
+  M.brandHit(9.02);
+  M.tl.fromTo("#word", { yPercent: 115 }, { yPercent: 0, duration: 0.6, ease: "power4.out" }, 9.15);
+  M.rise("#s4 .tag", 9.3, { y: 30 });
+  M.pop("#cta", 9.4);
+  M.idle("#logo-fl", 9.8, 2.0, { amp: 10, rot: 2, period: 1 });
+  M.idle("#cta-fl", 10.0, 1.8, { amp: 6, rot: 0, period: 0.9 });
+  M.end(10.0, 1.8);
+});
+</script>
+</body>
+</html>
