@@ -28,3 +28,6 @@
 | Contact sheet misses a storyboard beat | no helper registered a review frame there | `M.review("beat", t)` |
 | Need to inspect an exact moment | draft frames snap to 1/6 s | `render.mjs <project> --still 4.25,9.1` |
 | "outside safe area" / "clipped line" warnings | text off-frame, under platform UI, or a headline wider than the frame | fix the layout; ignore only for objects mid-entrance you've looked at |
+| SVG shapes fly in from a corner when popped/scaled | SVG transform origin defaults to the top-left of the viewBox | `M.pop` sets 50% 50% on SVG elements; for raw tweens use `gsap.set(el, { transformOrigin: "50% 50%" })` |
+| Highlighted word invisible on a dark background before the swipe | `.hl` text is set dark (to sit on the lime mark) | keep `.hl` light and tween it dark when the mark passes: `M.tl.fromTo(sel + " .hl", { color: light }, { color: dark, duration: .25 }, t + .55)` |
+

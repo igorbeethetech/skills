@@ -168,7 +168,7 @@ if (!flag("no-audio") && META.audio && from === 0) {
   const sfxWav = join(FRAMES, "audio.wav");
   const music = arg("music", null);
   await renderAudio({ ...META.audio, duration: DURATION, music: music ? false : META.audio.music }, sfxWav);
-  const master = "loudnorm=I=-14:TP=-2:LRA=11,aresample=48000,alimiter=limit=0.78:attack=1:release=60:level=false";
+  const master = "loudnorm=I=-14:TP=-2:LRA=11,aresample=48000,alimiter=limit=0.7:attack=1:release=60:level=false";
   if (music) {
     // user track: trimmed to the video, faded out, ducked under the SFX via sidechain
     await ffmpeg(["-y", "-i", silent, "-i", resolve(music), "-i", sfxWav, "-filter_complex",

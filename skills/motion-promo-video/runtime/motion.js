@@ -95,7 +95,7 @@
     function head(sel, t, { stagger = 0.09, sfx: s = true } = {}) {
       tl.fromTo(`${sel} .ln > span`, { yPercent: 115, rotation: 3 }, { yPercent: 0, rotation: 0, duration: 0.7, ease: "power4.out", stagger }, t);
       tl.fromTo(`${sel} .mark`, { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power3.inOut" }, t + 0.38);
-      if (s) { sfx("whoosh", t, { dur: 0.5, gain: 0.8 }); if ($(`${sel} .mark`).length) sfx("swoosh", t + 0.38, { gain: 0.6 }); }
+      if (s) { sfx("whoosh", t, { dur: 0.5, gain: 0.8 }); if ($$(`${sel} .mark`).length) sfx("swoosh", t + 0.38, { gain: 0.6 }); }
       mark(sel, t + 1.0);
     }
     function headOut(sel, t, { sfx: s = true } = {}) {
@@ -116,6 +116,7 @@
     // ——— objects ———
     function pop(sel, t, { stagger = 0.06, rotation, scale = 0, from = "start", sfx: s = true, pitch = 1 } = {}) {
       const els = $$(sel);
+      els.forEach((el) => { const n = typeof el === "string" ? document.querySelector(el) : el; if (n instanceof SVGElement) gsap.set(n, { transformOrigin: "50% 50%" }); }); // SVG default origin is the top-left corner
       tl.fromTo(els, { scale, autoAlpha: 0, rotation: (i, el) => (rotation ? rotation(i, el) * 4 : 0) },
         { scale: 1, autoAlpha: 1, rotation: (i, el) => (rotation ? rotation(i, el) : 0), duration: 0.55, ease: "back.out(2.2)", stagger: { each: stagger, from } }, t);
       if (s) els.forEach((_, i) => sfx("pop", t + i * stagger, { pitch: pitch * (0.9 + ((popIdx + i) % 6) * 0.08), pan: i % 2 ? 0.4 : -0.4 }));
@@ -133,7 +134,7 @@
     }
     /** Draw-on for SVG strokes (paths, lines, circles, rects…): stroke-dashoffset from full length to 0. */
     function draw(sel, t, { dur = 0.6, stagger = 0.12, ease = "power2.inOut", sfx: s = true } = {}) {
-      $(sel).forEach((el, i) => {
+      $$(sel).forEach((el, i) => {
         const len = Math.ceil(el.getTotalLength ? el.getTotalLength() : 1000) + 2;
         tl.fromTo(el, { attr: { "stroke-dasharray": len, "stroke-dashoffset": len } }, { attr: { "stroke-dashoffset": 0 }, duration: dur, ease }, t + i * stagger);
         if (s) sfx("scribble", t + i * stagger, { dur: dur * 0.9, pan: i % 2 ? 0.3 : -0.3 });
